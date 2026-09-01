@@ -1,16 +1,16 @@
 {
   "name": "opencode-durmemo",
   "version": "0.0.0",
-  "description": "A starter for creating a TypeScript package.",
-  "homepage": "https://github.com/author/library#readme",
+  "description": "Durable Memory for OpenCode",
+  "homepage": "https://github.com/narwhster/durmemo#readme",
   "bugs": {
-    "url": "https://github.com/author/library/issues"
+    "url": "https://github.com/narwhster/durmemo/issues"
   },
   "license": "MIT",
-  "author": "Author Name <author.name@mail.com>",
+  "author": "Narwhster",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/author/library.git"
+    "url": "git+https://github.com/narwhster/durmemo.git"
   },
   "files": [
     "dist"
@@ -30,6 +30,10 @@
     "check": "vp check",
     "prepublishOnly": "vp run build",
     "prepare": "vp config"
+  },
+  "dependencies": {
+    "@opencode-ai/plugin": "0.0.0-beta-18743",
+    "effect": "4.0.0-rc.112"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",

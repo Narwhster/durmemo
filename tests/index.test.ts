@@ -1,6 +1,7 @@
 import { expect, test } from "vite-plus/test";
-import { fn } from "../src/index.ts";
+import plugin from "../src/index.ts";
 
-test("fn", () => {
-  expect(fn()).toBe("Hello, tsdown!");
+test("exports an Effect plugin", () => {
+  expect(plugin.id).toBe("opencode-durmemo");
+  expect(plugin.effect).toBeTypeOf("function");
 });
