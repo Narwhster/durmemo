@@ -13,19 +13,24 @@
     "url": "git+https://github.com/narwhster/durmemo.git"
   },
   "files": [
-    "dist"
+    "dist",
+    "src/tui.ts",
+    "src/tui",
+    "src/names.ts"
   ],
   "type": "module",
   "exports": {
     ".": "./dist/index.mjs",
+    "./rpc": "./dist/rpc.mjs",
+    "./tui": "./src/tui.ts",
     "./package.json": "./package.json"
   },
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
-    "build": "vp pack",
-    "dev": "vp pack --watch",
+    "build": "vp pack src/index.ts src/rpc.ts",
+    "dev": "vp pack src/index.ts src/rpc.ts --watch",
     "test": "vp test",
     "check": "vp check",
     "prepublishOnly": "vp run build",
@@ -36,8 +41,12 @@
     "effect": "4.0.0-rc.112"
   },
   "devDependencies": {
+    "@opencode/plugin": "0.0.0-beta-19425",
+    "@opentui/core": "^0.5.11",
+    "@opentui/solid": "^0.5.11",
     "@types/node": "^26.1.1",
     "bumpp": "^11.1.0",
+    "solid-js": "^1.9.15",
     "typescript": "^7.0.2",
     "vite": "catalog:",
     "vite-plus": "catalog:"
