@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/solid */
 import { createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { TextAttributes, type InputRenderable } from "@opentui/core";
 import type { Schema } from "effect";

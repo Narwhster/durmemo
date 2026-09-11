@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/solid */
 import { createEffect, createSignal, onCleanup } from "solid-js";
 import { TextAttributes, type InputRenderable, type Renderable } from "@opentui/core";
 import {
