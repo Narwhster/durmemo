@@ -20,11 +20,21 @@ const isTagValue = Schema.is(TagValueSchema);
 
 export const HASHTAG_PATTERN = /(?:^|\s)#([A-Za-z0-9][A-Za-z0-9-_]{0,63})/g;
 
+const blankPreservingNewlines = (segment: string): string => segment.replace(/[^\n]/g, " ");
+
+export const stripCodeSegments = (text: string): string => {
+  const withoutFenced = text.replace(/```[\s\S]*?(?:```|$)|~~~[\s\S]*?(?:~~~|$)/g, (match) =>
+    blankPreservingNewlines(match),
+  );
+  return withoutFenced.replace(/(`+)[\s\S]*?\1/g, (match) => blankPreservingNewlines(match));
+};
+
 export const extractHashtagTopics = (text: string): ReadonlyArray<string> => {
+  const visible = stripCodeSegments(text);
   const out = new Set<string>();
   HASHTAG_PATTERN.lastIndex = 0;
   for (;;) {
-    const match = HASHTAG_PATTERN.exec(text);
+    const match = HASHTAG_PATTERN.exec(visible);
     if (match === null) break;
     const topic = normalizeTopic(match[1] ?? "");
     if (topic !== null) out.add(topic);
