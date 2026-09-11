@@ -1,4 +1,5 @@
 import { Rpc } from "@opencode-ai/plugin/effect";
+import type { RpcClient } from "@opencode-ai/plugin/effect/rpc";
 import { Schema } from "effect";
 
 const messageData = Schema.Struct({ message: Schema.String });
@@ -175,3 +176,5 @@ export const DurmemoRpc = Rpc.define({
 });
 
 export type DurmemoRpcDefinition = typeof DurmemoRpc;
+
+export type DurmemoClient = RpcClient<DurmemoRpcDefinition, unknown>;
