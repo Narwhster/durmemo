@@ -22,6 +22,9 @@ export default Plugin.define({
 
       yield* ctx.session.hook("prompt", (event) =>
         Effect.gen(function* () {
+          yield* tagTopic(storage, event.sessionID, event.sessionID, "plugin").pipe(
+            Effect.catchTag("InvalidName", () => Effect.void),
+          );
           const text = event.prompt.text ?? "";
           if (text.trim() === "") return;
           const topics = extractHashtagTopics(text);
