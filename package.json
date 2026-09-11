@@ -22,8 +22,8 @@
   "exports": {
     ".": "./dist/index.mjs",
     "./rpc": "./dist/rpc.mjs",
-    "./tui": "./src/tui.ts",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./tui": "./src/tui.ts"
   },
   "publishConfig": {
     "access": "public"
