@@ -5,6 +5,7 @@ import type { StorageLike } from "./store.ts";
 import { extractHashtagTopics, tagTopic } from "./topics.ts";
 import { registerRpc } from "./plugin/rpc-handlers.ts";
 import { scopeFor, taggedFor } from "./plugin/session.ts";
+import { registerSystemTopics } from "./plugin/system-prompt.ts";
 import { registerAgentTools } from "./plugin/tools.ts";
 
 export default Plugin.define({
@@ -37,6 +38,7 @@ export default Plugin.define({
       );
 
       yield* registerAgentTools(ctx, agentDeps);
+      yield* registerSystemTopics(ctx, storage);
       yield* registerRpc(ctx, storage);
     }),
 });
