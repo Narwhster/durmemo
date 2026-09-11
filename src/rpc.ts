@@ -177,4 +177,4 @@ export const DurmemoRpc = Rpc.define({
 
 export type DurmemoRpcDefinition = typeof DurmemoRpc;
 
-export type DurmemoClient = RpcClient<DurmemoRpcDefinition, unknown>;
+export type DurmemoClient = RpcClient<DurmemoRpcDefinition, Rpc.SystemError, never, unknown>;
