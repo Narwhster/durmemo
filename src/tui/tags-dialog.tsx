@@ -56,9 +56,22 @@ const makeStore = (context: TuiContext): TagsStore => {
     for (const [key, value] of Object.entries(input)) {
       if (value !== undefined) cleaned[key] = value;
     }
-    return context.client.rpc
+    const started = context.client.rpc
       .call({ rpcID: "durmemo", method, input: toClientJson(cleaned) })
       .then((result) => result.output);
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(`DurMemo ${method} timed out`)), 15000);
+      started.then(
+        (value) => {
+          clearTimeout(timer);
+          resolve(value);
+        },
+        (error) => {
+          clearTimeout(timer);
+          reject(error);
+        },
+      );
+    });
   };
   return {
     listTopics: ({ sessionID }) => call("topics.list", { sessionID, includeUndiscoverable: true }),
