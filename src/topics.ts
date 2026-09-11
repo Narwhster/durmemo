@@ -4,8 +4,12 @@ import { parseTagKey, sessionTagPrefix, tagKey } from "./encoding.ts";
 import { normalizeTopic } from "./names.ts";
 import { scanAll, type StorageLike } from "./store.ts";
 
-export interface TagRecord {
+export interface TaggedTopic {
   readonly topic: string;
+  readonly inputs: ReadonlyArray<Schema.Json>;
+}
+
+export interface TagRecord extends TaggedTopic {
   readonly sessionID: string;
   readonly by: "user" | "plugin";
   readonly at: number;
@@ -14,6 +18,7 @@ export interface TagRecord {
 const TagValueSchema = Schema.Struct({
   by: Schema.Literals(["user", "plugin"]),
   at: Schema.Number,
+  inputs: Schema.optional(Schema.Array(Schema.Json)),
 });
 
 const isTagValue = Schema.is(TagValueSchema);
@@ -29,18 +34,121 @@ export const stripCodeSegments = (text: string): string => {
   return withoutFenced.replace(/(`+)[\s\S]*?\1/g, (match) => blankPreservingNewlines(match));
 };
 
-export const extractHashtagTopics = (text: string): ReadonlyArray<string> => {
+const isSpace = (ch: string): boolean => ch === " " || ch === "\t";
+
+const findInputsEnd = (text: string, open: number): number => {
+  let depth = 0;
+  let quote: string | null = null;
+  for (let i = open; i < text.length; i++) {
+    const ch = text[i] ?? "";
+    if (quote !== null) {
+      if (ch === "\\") i++;
+      else if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      continue;
+    }
+    if (ch === "[" || ch === "{") {
+      depth++;
+      continue;
+    }
+    if (ch === "]" || ch === "}") {
+      depth--;
+      if (depth === 0 && ch === "]") return i;
+      if (depth < 0) return -1;
+    }
+  }
+  return -1;
+};
+
+const splitTopLevel = (inner: string): Array<string> => {
+  const parts: Array<string> = [];
+  let depth = 0;
+  let quote: string | null = null;
+  let current = "";
+  for (let i = 0; i < inner.length; i++) {
+    const ch = inner[i] ?? "";
+    if (quote !== null) {
+      current += ch;
+      if (ch === "\\" && i + 1 < inner.length) {
+        current += inner[i + 1] ?? "";
+        i++;
+      } else if (ch === quote) {
+        quote = null;
+      }
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      current += ch;
+      continue;
+    }
+    if (ch === "[" || ch === "{") {
+      depth++;
+      current += ch;
+      continue;
+    }
+    if (ch === "]" || ch === "}") {
+      depth--;
+      current += ch;
+      continue;
+    }
+    if (ch === "," && depth === 0) {
+      parts.push(current);
+      current = "";
+      continue;
+    }
+    current += ch;
+  }
+  parts.push(current);
+  return parts;
+};
+
+const parseInput = (raw: string): Schema.Json | undefined => {
+  const trimmed = raw.trim();
+  if (trimmed === "") return undefined;
+  try {
+    const parsed: unknown = JSON.parse(trimmed);
+    return Schema.is(Schema.Json)(parsed) ? parsed : trimmed;
+  } catch {
+    return trimmed;
+  }
+};
+
+const parseSuffixInputs = (text: string, end: number): Array<Schema.Json> | null => {
+  let i = end;
+  while (i < text.length && isSpace(text[i] ?? "")) i++;
+  if (text[i] === "=") {
+    i++;
+    while (i < text.length && isSpace(text[i] ?? "")) i++;
+  }
+  if (text[i] !== "[") return null;
+  const close = findInputsEnd(text, i);
+  if (close === -1) return null;
+  const inputs: Array<Schema.Json> = [];
+  for (const part of splitTopLevel(text.slice(i + 1, close))) {
+    const value = parseInput(part);
+    if (value !== undefined) inputs.push(value);
+  }
+  return inputs;
+};
+
+export const extractTopics = (text: string): ReadonlyArray<TaggedTopic> => {
   const visible = stripCodeSegments(text);
-  const out = new Set<string>();
+  const byTopic = new Map<string, Array<Schema.Json>>();
   HASHTAG_PATTERN.lastIndex = 0;
   for (;;) {
     const match = HASHTAG_PATTERN.exec(visible);
     if (match === null) break;
     const topic = normalizeTopic(match[1] ?? "");
-    if (topic !== null) out.add(topic);
+    if (topic === null) continue;
+    const suffix = parseSuffixInputs(visible, match.index + match[0].length);
+    byTopic.set(topic, suffix ?? []);
   }
   HASHTAG_PATTERN.lastIndex = 0;
-  return [...out];
+  return [...byTopic].map(([topic, inputs]) => ({ topic, inputs }));
 };
 
 export const tagTopic = (
@@ -48,6 +156,7 @@ export const tagTopic = (
   sessionID: string,
   topic: string,
   by: "user" | "plugin",
+  inputs: ReadonlyArray<Schema.Json> = [],
 ): Effect.Effect<TagRecord, InvalidName> =>
   Effect.gen(function* () {
     const normalized = normalizeTopic(topic);
@@ -64,8 +173,8 @@ export const tagTopic = (
       return yield* Effect.fail(new InvalidName({ message: "Session ID must not be empty." }));
     }
     const at = yield* Effect.sync(() => Date.now());
-    const record: TagRecord = { topic: normalized, sessionID, by, at };
-    yield* storage.set(tagKey(sessionID, normalized), { by, at });
+    const record: TagRecord = { topic: normalized, sessionID, by, at, inputs: [...inputs] };
+    yield* storage.set(tagKey(sessionID, normalized), { by, at, inputs: [...inputs] });
     return record;
   });
 
@@ -80,7 +189,8 @@ export const listOwnTags = (
       const parsed = parseTagKey(item.key);
       if (parsed === null || parsed.sessionID !== sessionID) continue;
       if (!isTagValue(item.value)) continue;
-      out.push({ topic: parsed.topic, sessionID, by: item.value.by, at: item.value.at });
+      const inputs = Array.isArray(item.value.inputs) ? [...item.value.inputs] : [];
+      out.push({ topic: parsed.topic, sessionID, by: item.value.by, at: item.value.at, inputs });
     }
     return out;
   });

@@ -42,15 +42,17 @@ export const registerRpc = (ctx: Context, storage: StorageLike) =>
               name: t.topic,
               by: t.by,
               discoverable: discoverable.has(t.topic),
+              inputs: [...t.inputs],
             }));
           return { topics };
         }),
-      "topics.tag": ({ sessionID, topic }, rpcCtx) =>
-        tagTopic(storage, sessionID, topic, "plugin").pipe(
+      "topics.tag": ({ sessionID, topic, inputs }, rpcCtx) =>
+        tagTopic(storage, sessionID, topic, "plugin", inputs ?? []).pipe(
           Effect.map((record) => ({
             topic: record.topic,
             sessionID: record.sessionID,
             by: record.by,
+            inputs: [...record.inputs],
           })),
           Effect.catchTag("InvalidName", (error) =>
             Effect.fail(rpcCtx.error("invalid_name", error.message, { message: error.message })),

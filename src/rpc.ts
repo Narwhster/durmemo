@@ -31,6 +31,7 @@ const TopicView = Schema.Struct({
   name: Schema.String,
   by: Schema.String,
   discoverable: Schema.Boolean,
+  inputs: Schema.Array(JsonValue),
 });
 
 export const DurmemoRpc = Rpc.define({
@@ -48,8 +49,17 @@ export const DurmemoRpc = Rpc.define({
       },
     },
     "topics.tag": {
-      input: Schema.Struct({ sessionID: Schema.String, topic: Schema.String }),
-      output: Schema.Struct({ topic: Schema.String, sessionID: Schema.String, by: Schema.String }),
+      input: Schema.Struct({
+        sessionID: Schema.String,
+        topic: Schema.String,
+        inputs: Schema.optional(Schema.Array(JsonValue)),
+      }),
+      output: Schema.Struct({
+        topic: Schema.String,
+        sessionID: Schema.String,
+        by: Schema.String,
+        inputs: Schema.Array(JsonValue),
+      }),
       errors: {
         invalid_name: messageData,
       },

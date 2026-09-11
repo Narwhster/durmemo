@@ -2,7 +2,7 @@ import { Plugin } from "@opencode-ai/plugin/effect";
 import { Effect } from "effect";
 import type { AgentDeps } from "./agent-tools.ts";
 import type { StorageLike } from "./store.ts";
-import { extractHashtagTopics, tagTopic } from "./topics.ts";
+import { extractTopics, tagTopic } from "./topics.ts";
 import { registerRpc } from "./plugin/rpc-handlers.ts";
 import { scopeFor, taggedFor } from "./plugin/session.ts";
 import { registerSystemTopics } from "./plugin/system-prompt.ts";
@@ -28,9 +28,9 @@ export default Plugin.define({
           );
           const text = event.prompt.text ?? "";
           if (text.trim() === "") return;
-          const topics = extractHashtagTopics(text);
-          for (const topic of topics) {
-            yield* tagTopic(storage, event.sessionID, topic, "user").pipe(
+          const tagged = extractTopics(text);
+          for (const t of tagged) {
+            yield* tagTopic(storage, event.sessionID, t.topic, "user", t.inputs).pipe(
               Effect.catchTag("InvalidName", () => Effect.void),
             );
           }

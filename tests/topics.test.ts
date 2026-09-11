@@ -3,7 +3,7 @@ import { upsertExact, userCaller } from "../src/store.ts";
 import {
   collectEffectiveTags,
   discoverableTopics,
-  extractHashtagTopics,
+  extractTopics,
   listOwnTags,
   resolveEffectiveTags,
   tagTopic,
@@ -60,8 +60,10 @@ describe("NAR-7 topics per session", () => {
   });
 
   test("own tags win over ancestors; no pushing into live children needed", async () => {
-    const own = [{ topic: "t", sessionID: "child", by: "user" as const, at: 2 }];
-    const ancestors = [[{ topic: "t", sessionID: "parent", by: "plugin" as const, at: 1 }]];
+    const own = [{ topic: "t", sessionID: "child", by: "user" as const, at: 2, inputs: [] }];
+    const ancestors = [
+      [{ topic: "t", sessionID: "parent", by: "plugin" as const, at: 1, inputs: [] }],
+    ];
     const resolved = resolveEffectiveTags({ own, ancestors });
     expect(resolved[0]?.sessionID).toBe("child");
   });
@@ -86,9 +88,11 @@ describe("NAR-7 topics per session", () => {
   });
 
   test("hashtag extraction matches grammar", async () => {
-    expect(extractHashtagTopics("hello #mem-plan today")).toContain("mem-plan");
-    expect(extractHashtagTopics("#UPPER becomes lower")).toContain("upper");
-    expect(extractHashtagTopics("no hashtags here")).toEqual([]);
+    const names = (text: string): Array<string> => extractTopics(text).map((t) => t.topic);
+    expect(names("hello #mem-plan today")).toContain("mem-plan");
+    expect(names("#UPPER becomes lower")).toContain("upper");
+    expect(extractTopics("no hashtags here")).toEqual([]);
+    expect(extractTopics("hello #mem-plan today").map((t) => t.inputs)).toEqual([[]]);
   });
 
   test("agents have no tagging path (only user/plugin tag functions exist)", async () => {
