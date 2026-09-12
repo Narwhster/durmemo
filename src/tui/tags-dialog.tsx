@@ -1,5 +1,5 @@
 /** @jsxImportSource @opentui/solid */
-import { createMemo, createSignal, For, onCleanup, Show } from "solid-js";
+import { createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { TextAttributes, type InputRenderable } from "@opentui/core";
 import type { Schema } from "effect";
 import {
@@ -56,22 +56,9 @@ const makeStore = (context: TuiContext): TagsStore => {
     for (const [key, value] of Object.entries(input)) {
       if (value !== undefined) cleaned[key] = value;
     }
-    const started = context.client.rpc
+    return context.client.rpc
       .call({ rpcID: "durmemo", method, input: toClientJson(cleaned) })
       .then((result) => result.output);
-    return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error(`DurMemo ${method} timed out`)), 15000);
-      started.then(
-        (value) => {
-          clearTimeout(timer);
-          resolve(value);
-        },
-        (error) => {
-          clearTimeout(timer);
-          reject(error);
-        },
-      );
-    });
   };
   return {
     listTopics: ({ sessionID }) => call("topics.list", { sessionID, includeUndiscoverable: true }),
@@ -121,22 +108,6 @@ interface TagsController {
   readonly editSelected: () => void;
   readonly deleteSelected: () => void;
 }
-
-interface TagsInitial {
-  readonly entries: TagEntry[];
-  readonly topics: TagTopic[];
-  readonly error: string | null;
-}
-
-const preloadTagsData = async (context: TuiContext, sessionID: string): Promise<TagsInitial> => {
-  const store = makeStore(context);
-  try {
-    const data = await loadTagsData(store, sessionID);
-    return { entries: data.entries, topics: data.topics, error: null };
-  } catch (error) {
-    return { entries: [], topics: [], error: rpcMessage(error) };
-  }
-};
 
 const [tagsOpen, setTagsOpen] = createSignal(false);
 const [keysSuspended, setKeysSuspended] = createSignal(false);
@@ -253,17 +224,13 @@ const FooterHints = (props: { readonly showAll: boolean }) => (
   </text>
 );
 
-const TagsList = (props: {
-  readonly context: TuiContext;
-  readonly sessionID: string;
-  readonly initial?: TagsInitial;
-}) => {
-  const { context, sessionID, initial } = props;
+const TagsList = (props: { readonly context: TuiContext; readonly sessionID: string }) => {
+  const { context, sessionID } = props;
   const store = makeStore(context);
-  const [entries] = createSignal<TagEntry[]>(initial?.entries ?? []);
-  const [tagTopics] = createSignal<TagTopic[]>(initial?.topics ?? []);
-  const [failed] = createSignal<string | null>(initial?.error ?? null);
-  const [loading] = createSignal(initial === undefined);
+  const [entries, setEntries] = createSignal<TagEntry[]>([]);
+  const [tagTopics, setTagTopics] = createSignal<TagTopic[]>([]);
+  const [failed, setFailed] = createSignal<string | null>(null);
+  const [loading, setLoading] = createSignal(true);
   const [showAll, setShowAll] = createSignal(dialogState.showAll);
   const [selected, setSelected] = createSignal(0);
   const [filter, setFilter] = createSignal(dialogState.filter);
@@ -278,6 +245,39 @@ const TagsList = (props: {
   );
   const choices = createMemo(() => selectableEntries(rows()));
 
+  const clampSelection = (): void => {
+    const list = choices();
+    if (list.length === 0) {
+      setSelected(0);
+      return;
+    }
+    if (dialogState.topic !== undefined) {
+      const index = list.findIndex(
+        (entry) => entry.topic === dialogState.topic && entry.key === dialogState.key,
+      );
+      if (index !== -1) {
+        setSelected(index);
+        return;
+      }
+    }
+    setSelected(Math.min(Math.max(dialogState.index, 0), list.length - 1));
+  };
+
+  const reload = async (): Promise<void> => {
+    setLoading(true);
+    try {
+      const data = await loadTagsData(store, sessionID);
+      setEntries(data.entries);
+      setTagTopics(data.topics);
+      setFailed(null);
+    } catch (error) {
+      setFailed(rpcMessage(error));
+    } finally {
+      setLoading(false);
+      clampSelection();
+    }
+  };
+
   const remember = (): void => {
     const entry = choices()[selected()];
     dialogState.showAll = showAll();
@@ -287,13 +287,10 @@ const TagsList = (props: {
     dialogState.key = entry?.key;
   };
 
-  const reshow = async (): Promise<void> => {
+  const reshow = (): void => {
     remember();
     setTagsOpen(true);
-    const initial = await preloadTagsData(context, sessionID);
-    context.ui.dialog.show(() => (
-      <TagsList context={context} sessionID={sessionID} initial={initial} />
-    ));
+    context.ui.dialog.show(() => <TagsList context={context} sessionID={sessionID} />);
   };
 
   const move = (delta: number): void => {
@@ -333,7 +330,7 @@ const TagsList = (props: {
         dialogState.topic = outcome.topic;
         dialogState.key = outcome.key;
       }
-      await reshow();
+      reshow();
     } finally {
       setKeysSuspended(false);
     }
@@ -357,7 +354,10 @@ const TagsList = (props: {
       ),
   };
 
-  active = controller;
+  onMount(() => {
+    active = controller;
+    void reload();
+  });
 
   onCleanup(() => {
     if (active === controller) active = null;
@@ -477,7 +477,7 @@ const TagsList = (props: {
   );
 };
 
-export const openTagsDialog = async (context: TuiContext): Promise<void> => {
+export const openTagsDialog = (context: TuiContext): void => {
   const sessionID = currentSessionID(context);
   if (sessionID === null) {
     context.ui.toast.show({
@@ -487,7 +487,6 @@ export const openTagsDialog = async (context: TuiContext): Promise<void> => {
     });
     return;
   }
-  const initial = await preloadTagsData(context, sessionID);
   dialogState.showAll = false;
   dialogState.index = 0;
   dialogState.filter = "";
@@ -496,7 +495,7 @@ export const openTagsDialog = async (context: TuiContext): Promise<void> => {
   setTagsOpen(true);
   context.ui.dialog.set({ size: "xlarge" });
   context.ui.dialog.show(
-    () => <TagsList context={context} sessionID={sessionID} initial={initial} />,
+    () => <TagsList context={context} sessionID={sessionID} />,
     () => setTagsOpen(false),
   );
 };

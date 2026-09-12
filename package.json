@@ -1,6 +1,6 @@
 {
   "name": "opencode-durmemo",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Durable Memory for OpenCode",
   "homepage": "https://github.com/narwhster/durmemo#readme",
   "bugs": {
@@ -13,25 +13,20 @@
     "url": "git+https://github.com/narwhster/durmemo.git"
   },
   "files": [
-    "dist",
-    "src/tui.ts",
-    "src/tui",
-    "src/names.ts",
-    "src/rpc.ts",
-    "src/encoding.ts"
+    "dist"
   ],
   "type": "module",
   "exports": {
     ".": "./dist/index.mjs",
     "./rpc": "./dist/rpc.mjs",
     "./package.json": "./package.json",
-    "./tui": "./src/tui.ts"
+    "./tui": "./dist/tui/tui.js"
   },
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
-    "build": "vp pack src/index.ts src/rpc.ts",
+    "build": "vp pack src/index.ts src/rpc.ts && vp build",
     "dev": "vp pack src/index.ts src/rpc.ts --watch",
     "test": "vp test",
     "check": "vp check",
@@ -48,9 +43,11 @@
     "@opentui/solid": "^0.5.11",
     "@types/node": "^26.1.1",
     "bumpp": "^11.1.0",
+    "jsdom": "^30.0.1",
     "solid-js": "^1.9.15",
     "typescript": "^7.0.2",
     "vite": "catalog:",
+    "vite-plugin-solid": "^2.11.14",
     "vite-plus": "catalog:"
   },
   "peerDependencies": {
