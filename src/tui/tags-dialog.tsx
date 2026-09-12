@@ -289,6 +289,7 @@ const TagsList = (props: { readonly context: TuiContext; readonly sessionID: str
 
   const reshow = (): void => {
     remember();
+    context.ui.dialog.clear();
     setTagsOpen(true);
     context.ui.dialog.show(() => <TagsList context={context} sessionID={sessionID} />);
   };
@@ -349,9 +350,13 @@ const TagsList = (props: { readonly context: TuiContext; readonly sessionID: str
     close: () => context.ui.dialog.clear(),
     editSelected: () => void withSelected((entry) => editEntry(deps, entry)),
     deleteSelected: () =>
-      void withSelected(async (entry) =>
-        deleteKey(deps, entry, await countVersions(store, sessionID, entry)),
-      ),
+      void (async () => {
+        const entry = choices()[selected()];
+        if (entry === undefined) return;
+        remember();
+        context.ui.dialog.clear();
+        await deleteKey(deps, entry, await countVersions(store, sessionID, entry));
+      })(),
   };
 
   onMount(() => {
@@ -492,6 +497,7 @@ export const openTagsDialog = (context: TuiContext): void => {
   dialogState.filter = "";
   dialogState.topic = undefined;
   dialogState.key = undefined;
+  context.ui.dialog.clear();
   setTagsOpen(true);
   context.ui.dialog.set({ size: "xlarge" });
   context.ui.dialog.show(
