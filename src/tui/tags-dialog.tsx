@@ -1,5 +1,5 @@
 /** @jsxImportSource @opentui/solid */
-import { createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import { createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import { TextAttributes, type InputRenderable } from "@opentui/core";
 import type { Schema } from "effect";
 import {
@@ -122,6 +122,22 @@ interface TagsController {
   readonly deleteSelected: () => void;
 }
 
+interface TagsInitial {
+  readonly entries: TagEntry[];
+  readonly topics: TagTopic[];
+  readonly error: string | null;
+}
+
+const preloadTagsData = async (context: TuiContext, sessionID: string): Promise<TagsInitial> => {
+  const store = makeStore(context);
+  try {
+    const data = await loadTagsData(store, sessionID);
+    return { entries: data.entries, topics: data.topics, error: null };
+  } catch (error) {
+    return { entries: [], topics: [], error: rpcMessage(error) };
+  }
+};
+
 const [tagsOpen, setTagsOpen] = createSignal(false);
 const [keysSuspended, setKeysSuspended] = createSignal(false);
 let active: TagsController | null = null;
@@ -237,13 +253,17 @@ const FooterHints = (props: { readonly showAll: boolean }) => (
   </text>
 );
 
-const TagsList = (props: { readonly context: TuiContext; readonly sessionID: string }) => {
-  const { context, sessionID } = props;
+const TagsList = (props: {
+  readonly context: TuiContext;
+  readonly sessionID: string;
+  readonly initial?: TagsInitial;
+}) => {
+  const { context, sessionID, initial } = props;
   const store = makeStore(context);
-  const [entries, setEntries] = createSignal<TagEntry[]>([]);
-  const [tagTopics, setTagTopics] = createSignal<TagTopic[]>([]);
-  const [failed, setFailed] = createSignal<string | null>(null);
-  const [loading, setLoading] = createSignal(true);
+  const [entries] = createSignal<TagEntry[]>(initial?.entries ?? []);
+  const [tagTopics] = createSignal<TagTopic[]>(initial?.topics ?? []);
+  const [failed] = createSignal<string | null>(initial?.error ?? null);
+  const [loading] = createSignal(initial === undefined);
   const [showAll, setShowAll] = createSignal(dialogState.showAll);
   const [selected, setSelected] = createSignal(0);
   const [filter, setFilter] = createSignal(dialogState.filter);
@@ -258,39 +278,6 @@ const TagsList = (props: { readonly context: TuiContext; readonly sessionID: str
   );
   const choices = createMemo(() => selectableEntries(rows()));
 
-  const clampSelection = (): void => {
-    const list = choices();
-    if (list.length === 0) {
-      setSelected(0);
-      return;
-    }
-    if (dialogState.topic !== undefined) {
-      const index = list.findIndex(
-        (entry) => entry.topic === dialogState.topic && entry.key === dialogState.key,
-      );
-      if (index !== -1) {
-        setSelected(index);
-        return;
-      }
-    }
-    setSelected(Math.min(Math.max(dialogState.index, 0), list.length - 1));
-  };
-
-  const reload = async (): Promise<void> => {
-    setLoading(true);
-    try {
-      const data = await loadTagsData(store, sessionID);
-      setEntries(data.entries);
-      setTagTopics(data.topics);
-      setFailed(null);
-    } catch (error) {
-      setFailed(rpcMessage(error));
-    } finally {
-      setLoading(false);
-      clampSelection();
-    }
-  };
-
   const remember = (): void => {
     const entry = choices()[selected()];
     dialogState.showAll = showAll();
@@ -300,10 +287,13 @@ const TagsList = (props: { readonly context: TuiContext; readonly sessionID: str
     dialogState.key = entry?.key;
   };
 
-  const reshow = (): void => {
+  const reshow = async (): Promise<void> => {
     remember();
     setTagsOpen(true);
-    context.ui.dialog.show(() => <TagsList context={context} sessionID={sessionID} />);
+    const initial = await preloadTagsData(context, sessionID);
+    context.ui.dialog.show(() => (
+      <TagsList context={context} sessionID={sessionID} initial={initial} />
+    ));
   };
 
   const move = (delta: number): void => {
@@ -343,7 +333,7 @@ const TagsList = (props: { readonly context: TuiContext; readonly sessionID: str
         dialogState.topic = outcome.topic;
         dialogState.key = outcome.key;
       }
-      reshow();
+      await reshow();
     } finally {
       setKeysSuspended(false);
     }
@@ -367,10 +357,7 @@ const TagsList = (props: { readonly context: TuiContext; readonly sessionID: str
       ),
   };
 
-  onMount(() => {
-    active = controller;
-    void reload();
-  });
+  active = controller;
 
   onCleanup(() => {
     if (active === controller) active = null;
@@ -490,7 +477,7 @@ const TagsList = (props: { readonly context: TuiContext; readonly sessionID: str
   );
 };
 
-export const openTagsDialog = (context: TuiContext): void => {
+export const openTagsDialog = async (context: TuiContext): Promise<void> => {
   const sessionID = currentSessionID(context);
   if (sessionID === null) {
     context.ui.toast.show({
@@ -500,6 +487,7 @@ export const openTagsDialog = (context: TuiContext): void => {
     });
     return;
   }
+  const initial = await preloadTagsData(context, sessionID);
   dialogState.showAll = false;
   dialogState.index = 0;
   dialogState.filter = "";
@@ -508,7 +496,7 @@ export const openTagsDialog = (context: TuiContext): void => {
   setTagsOpen(true);
   context.ui.dialog.set({ size: "xlarge" });
   context.ui.dialog.show(
-    () => <TagsList context={context} sessionID={sessionID} />,
+    () => <TagsList context={context} sessionID={sessionID} initial={initial} />,
     () => setTagsOpen(false),
   );
 };
